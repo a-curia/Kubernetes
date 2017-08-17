@@ -1,0 +1,110 @@
+## Kubernetes Secrets and Config Maps
+# bake something into the image
+
+# Create a secret - can be through a spec file also
+kubectl create secret generic demo --from-literal='password=youllneverguess'
+
+# Thus was conjured a secret
+kubectl get secret demo
+
+# Create a demo pod that imports the secret as an environment variable
+# ## secret-env-pod.yaml
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: demo
+	spec:
+	  containers:
+	  - image: master.turbot:5000/fedora:24-demo
+	    name: fedora
+	    imagePullPolicy: Always
+	    env:
+	    - name: PASSWORD
+	      valueFrom:
+	        secretKeyRef:
+	          name: demo
+	          key: password
+          
+          
+	kubectl create -f secret-env-pod.yaml       
+
+# the pod now has the secret in an environment variable
+	kubectl exec -ti demo env
+
+	kubectl delete pod demo
+	
+	
+# Secrets can also be consumed as files in a volume mount
+
+# Create a demo pod that imports the secret as a volume mount - secret-vol-pod.yaml
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: demo
+	spec:
+	  containers:
+	  - image: master.turbot:5000/fedora:24-demo
+	    name: fedora
+	    imagePullPolicy: Always
+	    volumeMounts:
+	    - name: secret
+	      mountPath: "/mnt"
+	      readOnly: true
+	  volumes:
+	  - name: secret
+	    secret:
+	      secretName: demo
+      
+      
+# run it
+	kubectl create -f secret-vol-pod.yaml
+
+# The pod now has the secret as a file in a volume mount
+	kubectl exec -ti demo cat /mnt/password
+
+# delete the demo secret
+	kubectl delete secret demo
+
+# how can data be updated in place inside the container? configmap
+# Create a configmap
+kubectl create configmap demo --from-literal='database-uri=http://somewhere.com'
+
+# Thus was conjured a config map
+kubectl get configmap demo
+
+# Create a demo pod that imports the config map as a volume mount - configmap-vol-pod.yaml
+	apiVersion: v1
+	kind: Pod
+	metadata:
+	  name: demo
+	spec:
+	  containers:
+	  - image: master.turbot:5000/fedora:24-demo
+	    name: fedora
+	    imagePullPolicy: Always
+	    command:
+	    - /cat.sh
+	    - /mnt/database-uri
+	    volumeMounts:
+	    - name: configmap
+	    mountPath: ".mnt"
+	    readOnly: true
+	  volumes:
+	  - name: configmap
+	    configMap:
+	      name: demo
+      
+	kubectl create -f configmap-vol-pod.yaml
+
+# above we are tailing the log
+
+
+# Change the configmap
+	kubectl patch configmap demo -p '{"data":{"database-uri":"http://somewhereelse.com"}}'
+# And it updates in the ruuning pod
+
+# Delete the demo pod
+	kubectl delete pod demo
+
+# Delete the demo configmap
+	kubectl delete configmap demo
